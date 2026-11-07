@@ -18,7 +18,7 @@ class SingleLineTracker:
   WIDTH_MAX_AGE = 5.0
   WIDTH_MAX_DISTANCE = 75.0
   MAX_PATH_DISAGREEMENT = 0.8
-  MIN_CLEARANCE = 1.1
+  MIN_CLEARANCE = 0.95
 
   def __init__(self):
     self.reset()
@@ -192,7 +192,7 @@ class SingleLineTracker:
           if edge_y is None or target_y is None:
             raise ValueError
           clearance = (target_y - edge_y) if index == 0 else (edge_y - target_y)
-          if clearance < self.MIN_CLEARANCE + max(-0.3, min(0.3, offset)) * (1 if index == 1 else -1):
+          if clearance < self.MIN_CLEARANCE + max(-1.2, min(1.2, offset)) * (1 if index == 1 else -1):
             raise ValueError
       return target
     except (AttributeError, IndexError, TypeError, ValueError, OverflowError):
@@ -204,4 +204,4 @@ class SingleLineTracker:
     if self.path is None or self.blocked:
       return TrackingTarget(blocked=self.blocked)
     value = self._at(self.path, lookahead)
-    return TrackingTarget(None if value is None else value + max(-0.3, min(0.3, offset)))
+    return TrackingTarget(None if value is None else value + max(-1.2, min(1.2, offset)))
