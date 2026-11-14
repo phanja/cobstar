@@ -228,6 +228,25 @@ export const LayoutWidgetPreview = {
         <text :x="widget.width - 70" :y="widget.height / 2 + 12" text-anchor="end" font-size="34" font-weight="600" fill="#f5f2fc">24.6</text>
         <text :x="widget.width - 30" :y="widget.height / 2 + 12" text-anchor="end" font-size="22" fill="#b8b2c8">ms</text>
       </g>
+      <g v-else-if="widget.kind === 'lane_offset'">
+        <rect x="0" y="0" :width="widget.width" :height="widget.height" :rx="widget.height * .35" :fill="palette.cardFill" :stroke="palette.cardBorder" stroke-width="2" />
+        <line :x1="widget.width / 2 - 118" :y1="widget.height / 2 - 22" :x2="widget.width / 2 - 118" :y2="widget.height / 2 + 22" stroke="white" stroke-width="2.5" />
+        <line :x1="widget.width / 2 + 118" :y1="widget.height / 2 - 22" :x2="widget.width / 2 + 118" :y2="widget.height / 2 + 22" stroke="white" stroke-width="2.5" />
+        <line :x1="widget.width / 2 - 123" :y1="widget.height / 2 - 22" :x2="widget.width / 2 - 123" :y2="widget.height / 2 + 22" stroke="#00a0ff" stroke-width="3" />
+        <line :x1="widget.width / 2 + 123" :y1="widget.height / 2 - 22" :x2="widget.width / 2 + 123" :y2="widget.height / 2 + 22" stroke="#00a0ff" stroke-width="3" />
+        <circle :cx="widget.width / 2 - 86" :cy="widget.height / 2" r="4" fill="white" fill-opacity=".31" />
+        <circle :cx="widget.width / 2 - 43" :cy="widget.height / 2" r="4" fill="white" fill-opacity=".31" />
+        <g :transform="'translate(' + (widget.width / 2) + ' ' + (widget.height / 2) + ')'">
+          <path d="M-14 -2 L-8 -15 L8 -15 L14 -2" fill="none" :stroke="scene === 'braking' ? '#ff3b3b' : 'white'" stroke-width="2.5" stroke-linejoin="round" />
+          <rect x="-17" y="-2" width="34" height="16" rx="4" :fill="scene === 'braking' ? '#ff3b3b' : 'white'" />
+          <rect x="-15" y="1" width="6" height="4" :fill="scene === 'braking' ? '#ffdddd' : '#d22030'" />
+          <rect x="9" y="1" width="6" height="4" :fill="scene === 'braking' ? '#ffdddd' : '#d22030'" />
+          <rect x="-14" y="14" width="5" height="3" fill="#14181b" />
+          <rect x="9" y="14" width="5" height="3" fill="#14181b" />
+        </g>
+        <circle :cx="widget.width / 2 + 43" :cy="widget.height / 2" r="4" fill="white" fill-opacity=".31" />
+        <circle :cx="widget.width / 2 + 86" :cy="widget.height / 2" r="4" fill="white" fill-opacity=".31" />
+      </g>
       <template v-else-if="widget.kind === 'speed_limit'">
         <text x="0" y="10" font-size="24" font-weight="500">LIMIT</text>
         <path v-if="pending(scene)" d="M90 12 V-8 M84 -2 L90 -8 L96 -2" fill="none" :stroke="palette.text || '#ffffff'" stroke-width="2" />
@@ -243,9 +262,13 @@ export const LayoutWidgetPreview = {
         <text v-else :x="widget.width / 2" :y="profile === 'large' ? 72 : 24" text-anchor="middle"
           dominant-baseline="middle" :font-size="profile === 'large' ? 48 : 28">Toyota guidance</text>
       </template>
-      <g v-else-if="widget.kind === 'torque_bar'" fill="none" stroke="white" stroke-linecap="round">
-        <path :d="'M 12 ' + widget.height * .8 + ' Q ' + widget.width / 2 + ' ' + widget.height * .55 + ' ' + (widget.width - 12) + ' ' + widget.height * .8" :stroke-width="widget.height * .18" opacity=".3" />
-        <path :d="'M ' + widget.width / 2 + ' ' + widget.height * .68 + ' Q ' + widget.width * .65 + ' ' + widget.height * .68 + ' ' + widget.width * .8 + ' ' + widget.height * .74" :stroke-width="widget.height * .18" opacity=".9" />
+      <g v-else-if="widget.kind === 'torque_bar'" fill="none" stroke-linecap="round">
+        <path :d="'M 12 ' + widget.height * .8 + ' Q ' + widget.width / 2 + ' ' + widget.height * .55 + ' ' + (widget.width - 12) + ' ' + widget.height * .8" stroke="white" :stroke-width="widget.height * .18" opacity=".3" />
+        <path :d="'M ' + widget.width / 2 + ' ' + widget.height * .68 + ' Q ' + widget.width * .65 + ' ' + widget.height * .68 + ' ' + widget.width * .8 + ' ' + widget.height * .74" stroke="white" :stroke-width="widget.height * .18" opacity=".9" />
+        <circle :cx="widget.width / 2" :cy="widget.height * .68" :r="widget.height * .05" fill="#b6b6b6" opacity=".9" />
+        <path :d="'M 18 ' + widget.height * .92 + ' Q ' + widget.width / 2 + ' ' + widget.height * .72 + ' ' + (widget.width - 18) + ' ' + widget.height * .92" stroke="white" :stroke-width="widget.height * .08" opacity=".2" />
+        <path :d="'M ' + widget.width / 2 + ' ' + widget.height * .72 + ' Q ' + widget.width * .62 + ' ' + widget.height * .74 + ' ' + widget.width * .72 + ' ' + widget.height * .79" stroke="#00c8ff" :stroke-width="widget.height * .08" opacity=".85" />
+        <circle :cx="widget.width / 2" :cy="widget.height * .72" :r="widget.height * .04" fill="#b6b6b6" opacity=".9" />
       </g>
       <g v-else-if="widget.kind === 'pip_camera'">
         <circle :cx="widget.width / 2" :cy="widget.height / 2" :r="widget.width / 2 - 3" fill="#152c39" stroke="#5ee5ee" stroke-width="3" />
