@@ -96,6 +96,8 @@ DESCRIPTIONS = {
   'reset_calibration': 'Clears saved camera and steering calibration. The device recalibrates on the next drive.',
   'reset_driver_monitoring': 'Clear saved wheel-side detection. Automatic detection restarts on the next drive.',
   'AlwaysAllowUploads': 'Allows queued full logs and videos to upload over metered networks. This uses mobile data.',
+  'AutoUploadRlog': 'Automatically upload full raw logs (rlog) offroad over Wi-Fi.',
+  'AutoUploadCameras': 'Automatically upload road and wide cameras offroad over Wi-Fi (driver camera excluded).',
   'UseVOACC': ('Use vision-only adaptive cruise control instead of radar-assisted lead detection. ' +
                'Requires StarPilot longitudinal control. Applies next drive; radar faults and safety checks remain active.'),
   'ToyotaAutoHold': ('Holds the brakes after you press the brake for over one second at a complete stop ' +

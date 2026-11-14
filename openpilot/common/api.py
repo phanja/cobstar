@@ -53,6 +53,8 @@ def api_get(endpoint, method='GET', timeout=None, access_token=None, session=Non
   headers = {}
   if access_token is not None:
     headers['Authorization'] = "JWT " + access_token
+    if provider.name == 'konik' and 'access_token' not in params:
+      params['access_token'] = access_token
 
   headers['User-Agent'] = "openpilot-" + get_version()
 

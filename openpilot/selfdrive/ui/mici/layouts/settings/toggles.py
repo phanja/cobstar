@@ -61,6 +61,12 @@ class TogglesLayoutMici(NavScroller):
     enable_openpilot = BigParamControl("enable openpilot", "OpenpilotEnabledToggle", toggle_callback=restart_needed_callback,
                                        description="Enable to use openpilot driver assistance.\n" +
                                                    "Disable to use your car's stock driver assistance.")
+    auto_upload_rlog = BigParamControl("auto upload raw logs", "AutoUploadRlog",
+                                       description="Automatically upload full raw logs (rlog) offroad over Wi-Fi.")
+    auto_upload_cameras = BigParamControl("auto upload road cameras", "AutoUploadCameras",
+                                          description="Automatically upload road and wide camera footage offroad over Wi-Fi (driver camera excluded).")
+    always_allow_uploads = BigParamControl("always allow uploads", "AlwaysAllowUploads",
+                                           description="Allow queued full logs and videos on metered networks. Uses mobile data.")
 
     self._scroller.add_widgets([
       self._personality_toggle,
@@ -75,6 +81,9 @@ class TogglesLayoutMici(NavScroller):
       record_front,
       record_mic,
       enable_openpilot,
+      auto_upload_rlog,
+      auto_upload_cameras,
+      always_allow_uploads,
     ])
 
     # Toggle lists
@@ -89,6 +98,9 @@ class TogglesLayoutMici(NavScroller):
       ("RecordFront", record_front),
       ("RecordAudio", record_mic),
       ("OpenpilotEnabledToggle", enable_openpilot),
+      ("AutoUploadRlog", auto_upload_rlog),
+      ("AutoUploadCameras", auto_upload_cameras),
+      ("AlwaysAllowUploads", always_allow_uploads),
     )
 
     enable_openpilot.set_enabled(lambda: not ui_state.engaged)

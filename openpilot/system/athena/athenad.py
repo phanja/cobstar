@@ -233,6 +233,7 @@ def handle_long_poll(ws: WebSocket, exit_event: threading.Event | None) -> None:
     threading.Thread(target=upload_handler, args=(end_event,), name='upload_handler3'),
     threading.Thread(target=upload_handler, args=(end_event,), name='upload_handler4'),
     threading.Thread(target=log_handler, args=(end_event,), name='log_handler'),
+    threading.Thread(target=auto_upload_worker, args=(end_event,), name='auto_upload_worker'),
   ] + [
     threading.Thread(target=jsonrpc_handler, args=(end_event,), name=f'worker_{x}')
     for x in range(HANDLER_THREADS)
@@ -353,6 +354,10 @@ def upload_handler(end_event: threading.Event) -> None:
             retry_upload(tid, end_event)
           else:
             cloudlog.event("athena.upload_handler.success", fn=fn, sz=sz, network_type=network_type, metered=metered)
+            try:
+              setxattr(fn, LOG_ATTR_NAME, b'1')
+            except OSError:
+              pass
 
         UploadQueueCache.cache(upload_queue)
       except (requests.exceptions.Timeout, requests.exceptions.ConnectionError, requests.exceptions.SSLError):
@@ -366,6 +371,133 @@ def upload_handler(end_event: threading.Event) -> None:
       pass
     except Exception:
       cloudlog.exception("athena.upload_handler.exception")
+
+
+def auto_upload_worker(end_event: threading.Event) -> None:
+  params = Params()
+  dongle_id = params.get("DongleId")
+  if not dongle_id:
+    return
+  api = Api(dongle_id)
+
+  while not end_event.is_set():
+    if end_event.wait(30):
+      break
+
+    try:
+      auto_rlog = params.get_bool("AutoUploadRlog")
+      auto_cameras = params.get_bool("AutoUploadCameras")
+      if not (auto_rlog or auto_cameras):
+        continue
+
+      if not params.get_bool("IsOffroad"):
+        continue
+
+      metered = params.get_bool("NetworkMetered")
+      always_allow = params.get_bool("AlwaysAllowUploads")
+      if phone_uplink_active() or (metered and not always_allow):
+        continue
+
+      targets = []
+      if auto_rlog:
+        targets.append("rlog.zst")
+      if auto_cameras:
+        # Only upload road-facing cameras; driver camera (dcamera.hevc) is intentionally excluded
+        targets.extend(["fcamera.hevc", "ecamera.hevc"])
+
+      log_root = Paths.log_root()
+      if not os.path.isdir(log_root):
+        continue
+
+      try:
+        entries = sorted(os.listdir(log_root))
+      except OSError:
+        continue
+
+      queued_paths = {item['path'] for item in listUploadQueue()}
+      for entry in entries:
+        if end_event.is_set():
+          break
+
+        segment_dir = os.path.join(log_root, entry)
+        if not os.path.isdir(segment_dir) or entry.startswith(".") or entry in ("boot", "crash"):
+          continue
+
+        if not owns_recording(segment_dir, log_root):
+          continue
+
+        try:
+          files_in_dir = set(os.listdir(segment_dir))
+        except OSError:
+          continue
+
+        if any(f.endswith(".lock") for f in files_in_dir):
+          continue
+
+        for target in targets:
+          if end_event.is_set():
+            break
+
+          if target not in files_in_dir:
+            continue
+
+          file_path = os.path.join(segment_dir, target)
+          rel_fn = os.path.join(entry, target)
+
+          try:
+            val = getxattr(file_path, LOG_ATTR_NAME)
+            if val == b'1' or (val is not None and val == LOG_ATTR_VALUE_MAX_UNIX_TIME):
+              continue
+          except (OSError, ValueError):
+            pass
+
+          if file_path in queued_paths:
+            continue
+
+          token = api.get_token()
+          try:
+            url_resp = api.get(f"v1.4/{dongle_id}/upload_url/", timeout=15, path=rel_fn, access_token=token)
+          except Exception:
+            continue
+
+          if url_resp.status_code == 412:
+            try:
+              setxattr(file_path, LOG_ATTR_NAME, b'1')
+            except OSError:
+              pass
+            continue
+
+          if url_resp.status_code != 200:
+            continue
+
+          try:
+            resp_data = url_resp.json()
+            url = resp_data.get("url")
+            headers = resp_data.get("headers") or {}
+          except Exception:
+            continue
+
+          if not url:
+            continue
+
+          item = UploadItem(
+            path=file_path,
+            url=url,
+            headers=headers,
+            created_at=int(time.time() * 1000),  # noqa: TID251
+            id=None,
+            allow_cellular=always_allow,
+            priority=80,
+          )
+          upload_id = hashlib.sha1(str(item).encode()).hexdigest()
+          item = replace(item, id=upload_id)
+          upload_queue.put_nowait(item)
+          queued_paths.add(file_path)
+          UploadQueueCache.cache(upload_queue)
+          cloudlog.event("athena.auto_upload_enqueued", fn=rel_fn)
+
+    except Exception:
+      cloudlog.exception("athena.auto_upload_worker.exception")
 
 
 def _do_upload(upload_item: UploadItem, callback: Callable | None = None) -> requests.Response:

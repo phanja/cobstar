@@ -95,7 +95,7 @@ def cooling_available() -> bool:
 DRIVE_MODE_KEYS = ("DriveModeProfiles", "DriveModeAcceleration", "DriveModeDeceleration")
 
 BOOL_DEFAULTS = {
-  "GMPedalLongitudinal": False, "ForceStops": True, "AlwaysAllowUploads": False, "TurnAssist": True,
+  "GMPedalLongitudinal": False, "ForceStops": True, "AlwaysAllowUploads": False, "AutoUploadRlog": False, "AutoUploadCameras": False, "TurnAssist": True,
   "DriveModeProfiles": False, "DriveModeAcceleration": True, "DriveModeDeceleration": True,
   "SubaruAvhStartup": False,
   "SubaruStopStartOff": False,
@@ -878,8 +878,14 @@ class FeatureSettingsOwner:
     rows: list[FeatureRow] = []
     if page == "data":
       title = "Data Uploads"
-      rows = [self._bool_row("AlwaysAllowUploads", "Always Allow Uploads", self.authority("preferences"),
-                             "Allow queued full logs and videos on metered networks. Uses mobile data.")]
+      rows = [
+        self._bool_row("AlwaysAllowUploads", "Always Allow Uploads", self.authority("preferences"),
+                       "Allow queued full logs and videos on metered networks. Uses mobile data."),
+        self._bool_row("AutoUploadRlog", "Auto Upload Raw Logs", self.authority("preferences"),
+                       "Automatically upload full raw logs (rlog) offroad over Wi-Fi."),
+        self._bool_row("AutoUploadCameras", "Auto Upload Road Cameras", self.authority("preferences"),
+                       "Automatically upload road and wide cameras offroad over Wi-Fi (driver camera excluded)."),
+      ]
     elif page == "power":
       title = "Power and Cooling"
       if cooling_available():
@@ -1380,7 +1386,7 @@ class FeatureSettingsOwner:
                                    default_value=str(round(max(low, min(high, default_curve[index])), 4))))
     fingerprint = self.vehicle_fingerprint()
     rows = [replace(row, vehicle_fingerprint=None if row.key in GLOBAL_BOOL_PREFERENCES or
-                    row.key in (PLANNER_SELECTION_KEY, "ShowSpeedLimits", "AlwaysAllowUploads") or
+                    row.key in (PLANNER_SELECTION_KEY, "ShowSpeedLimits", "AlwaysAllowUploads", "AutoUploadRlog", "AutoUploadCameras") or
                     row.key.startswith('conditional:') and not row.key.startswith(BUTTON_PREFIX) else fingerprint)
             for row in rows]
     subtitle = (
@@ -1561,7 +1567,7 @@ class FeatureSettingsOwner:
       source_key = key
       long_key = (key in ("CustomPersonalities", "ForceStops", "ForceStopDistanceOffset", *DRIVE_MODE_KEYS) or "Personality" in key or
                   key.endswith(("Follow", "FollowHigh")) or "Jerk" in key)
-      if key in ("ShowSpeedLimits", "AlwaysAllowUploads", *SOURCE_PRIORITY_KEYS) or (key == "ForceStops" and request.value == "Off"):
+      if key in ("ShowSpeedLimits", "AlwaysAllowUploads", "AutoUploadRlog", "AutoUploadCameras", *SOURCE_PRIORITY_KEYS) or (key == "ForceStops" and request.value == "Off"):
         group = "preferences"
       elif key in LANE_LIVE_KEYS and not self.authority("lane"):
         group = "lane_live"
@@ -1571,7 +1577,7 @@ class FeatureSettingsOwner:
       return False
     try:
       profile_master_source = self._raw("CustomPersonalities") if source_key == PERSONALITY_PROFILES_PARAM else None
-      if ((request.vehicle_fingerprint is not None if key in ("ShowSpeedLimits", "AlwaysAllowUploads") else
+      if ((request.vehicle_fingerprint is not None if key in ("ShowSpeedLimits", "AlwaysAllowUploads", "AutoUploadRlog", "AutoUploadCameras") else
            not request.vehicle_fingerprint or self.vehicle_fingerprint() != request.vehicle_fingerprint) or
           not self.authority(group) or self._raw(source_key) != request.expected or
           not self._readable(source_key)):
@@ -1742,7 +1748,7 @@ class FeatureSettingsOwner:
         from openpilot.starpilot.lateral.lane_runtime import runtime_supported
         if not runtime_supported(self.vehicle_params()):
           return False
-      if ((request.vehicle_fingerprint is not None if key in ("ShowSpeedLimits", "AlwaysAllowUploads") else
+      if ((request.vehicle_fingerprint is not None if key in ("ShowSpeedLimits", "AlwaysAllowUploads", "AutoUploadRlog", "AutoUploadCameras") else
            self.vehicle_fingerprint() != request.vehicle_fingerprint) or
           not self.authority(group) or self._raw(source_key) != request.expected or
           key == "reset_profiles" and not self.authority("parked_preferences") or
