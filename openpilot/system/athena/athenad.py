@@ -23,7 +23,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from functools import partial, total_ordering
 from queue import Queue
-from typing import cast
+from typing import cast, Any
 from collections.abc import Callable, Iterable
 
 import requests
@@ -87,13 +87,31 @@ UploadItemDict = dict[str, str | bool | int | float | dict[str, str]]
 UploadFilesToUrlResponse = dict[str, int | list[UploadItemDict] | list[str]]
 
 # param validators for RPC inputs
-DATA_PATH = r'(?!.*\.\.)[\w\-.][\w\-./]*'  # relative to log root
-UPLOAD_URL = regex(r'https?://[\x21-\x7e]+')
+DATA_PATH = r'(?!.*\.\.)[\w\-./|]*'  # relative to log root
+UPLOAD_URL_PATTERN = r'https?://[\x21-\x7e]+'
+UPLOAD_URL = regex(UPLOAD_URL_PATTERN)
 UPLOAD_HEADERS = dict_of(regex(r'[\w\-]+'), regex(r'[\x20-\x7e]*'))
 UPLOAD_ID = regex(r'[0-9a-f]{40}')
 CLIP_FILENAME = regex(r'[\w\-][\w\-.]*')
-UPLOAD_FILE = struct({"fn": regex(DATA_PATH), "url": UPLOAD_URL, "headers": UPLOAD_HEADERS},
-                     {"allow_cellular": boolean, "priority": integer(0, DEFAULT_UPLOAD_PRIORITY)})
+UPLOAD_FILE_DICT = struct({"fn": regex(DATA_PATH), "url": UPLOAD_URL},
+                          {"headers": either(UPLOAD_HEADERS, one_of(None)), "allow_cellular": boolean,
+                           "priority": integer(0, DEFAULT_UPLOAD_PRIORITY)})
+
+
+def is_upload_file_list(v: Any) -> bool:
+  if not isinstance(v, (list, tuple)) or len(v) < 2:
+    return False
+  fn, url = v[0], v[1]
+  if not isinstance(fn, str) or not re.fullmatch(DATA_PATH, fn):
+    return False
+  if not isinstance(url, str) or not re.fullmatch(UPLOAD_URL_PATTERN, url):
+    return False
+  if len(v) > 2 and v[2] is not None and not UPLOAD_HEADERS(v[2]):
+    return False
+  return True
+
+
+UPLOAD_FILE = either(UPLOAD_FILE_DICT, is_upload_file_list)
 
 
 class UploadTOSAdapter(HTTPAdapter):
@@ -116,8 +134,15 @@ class UploadFile:
   priority: int = DEFAULT_UPLOAD_PRIORITY
 
   @classmethod
-  def from_dict(cls, d: dict) -> UploadFile:
-    return cls(d.get("fn", ""), d.get("url", ""), d.get("headers", {}), d.get("allow_cellular", False), d.get("priority", DEFAULT_UPLOAD_PRIORITY))
+  def from_dict(cls, d: dict | list | tuple) -> UploadFile:
+    if isinstance(d, (list, tuple)):
+      fn = d[0] if len(d) > 0 else ""
+      url = d[1] if len(d) > 1 else ""
+      headers = d[2] if len(d) > 2 and isinstance(d[2], dict) else {}
+      allow_cellular = d[3] if len(d) > 3 and isinstance(d[3], bool) else False
+      priority = d[4] if len(d) > 4 and isinstance(d[4], int) else DEFAULT_UPLOAD_PRIORITY
+      return cls(fn, url, headers, allow_cellular, priority)
+    return cls(d.get("fn", ""), d.get("url", ""), d.get("headers") or {}, d.get("allow_cellular", False), d.get("priority", DEFAULT_UPLOAD_PRIORITY))
 
 
 @dataclass
@@ -349,10 +374,13 @@ def _do_upload(upload_item: UploadItem, callback: Callable | None = None) -> req
     raise ValueError('Recording belongs to another cloud provider')
   compress = False
 
-  # If file does not exist, but does exist without the .zst extension we will compress on the fly
-  if not os.path.exists(path) and os.path.exists(strip_zst_extension(path)):
-    path = strip_zst_extension(path)
-    compress = True
+  # If file does not exist, check for alternates
+  if not os.path.exists(path):
+    if os.path.exists(path + '.zst'):
+      path = path + '.zst'
+    elif os.path.exists(strip_zst_extension(path)):
+      path = strip_zst_extension(path)
+      compress = True
 
   stream = None
   try:
@@ -649,13 +677,13 @@ dispatcher.add_method(video_clips.deleteClip, filename=CLIP_FILENAME)
 dispatcher.add_method(video_clips.getClipChunk, filename=CLIP_FILENAME, offset=integer(0, 2**32))
 
 
-@dispatcher.add_method(fn=regex(DATA_PATH), url=UPLOAD_URL, headers=UPLOAD_HEADERS)
-def uploadFileToUrl(fn: str, url: str, headers: dict[str, str]) -> UploadFilesToUrlResponse:
+@dispatcher.add_method(fn=regex(DATA_PATH), url=UPLOAD_URL, headers=either(UPLOAD_HEADERS, one_of(None)))
+def uploadFileToUrl(fn: str, url: str, headers: dict[str, str] | None = None) -> UploadFilesToUrlResponse:
   # this is because mypy doesn't understand that the decorator doesn't change the return type
   response: UploadFilesToUrlResponse = uploadFilesToUrls([{
     "fn": fn,
     "url": url,
-    "headers": headers,
+    "headers": headers or {},
   }])
   return response
 
@@ -671,10 +699,22 @@ def uploadFilesToUrls(files_data: list[UploadFileDict]) -> UploadFilesToUrlRespo
       failed.append(file.fn)
       continue
 
-    path = os.path.join(Paths.log_root(), file.fn)
-    if not owns_recording(path, Paths.log_root()) or (not os.path.exists(path) and not os.path.exists(strip_zst_extension(path))):
+    rel_fn = file.fn.split('|')[-1]
+    path = os.path.join(Paths.log_root(), rel_fn)
+
+    real_path = None
+    if os.path.exists(path):
+      real_path = path
+    elif os.path.exists(path + '.zst'):
+      real_path = path + '.zst'
+    elif os.path.exists(strip_zst_extension(path)):
+      real_path = strip_zst_extension(path)
+
+    if real_path is None or not owns_recording(real_path, Paths.log_root()):
       failed.append(file.fn)
       continue
+
+    path = real_path
 
     # Skip item if already in queue
     url = file.url.split('?')[0]
@@ -1079,12 +1119,14 @@ def main(exit_event: threading.Event | None = None):
       if conn_start is None:
         conn_start = time.monotonic()
 
-      cloudlog.event("athenad.main.connecting_ws", ws_uri=ws_uri, retries=conn_retries)
-      ws = create_connection(ws_uri,
-                             cookie="jwt=" + api.get_token(),
+      token = api.get_token()
+      connect_uri = f"{ws_uri}?access_token={token}" if '?' not in ws_uri else f"{ws_uri}&access_token={token}"
+      cloudlog.event("athenad.main.connecting_ws", ws_uri=connect_uri, retries=conn_retries)
+      ws = create_connection(connect_uri,
+                             cookie="jwt=" + token,
                              enable_multithread=True,
                              timeout=30.0)
-      cloudlog.event("athenad.main.connected_ws", ws_uri=ws_uri, retries=conn_retries,
+      cloudlog.event("athenad.main.connected_ws", ws_uri=connect_uri, retries=conn_retries,
                      duration=time.monotonic() - conn_start)
       conn_start = None
 
