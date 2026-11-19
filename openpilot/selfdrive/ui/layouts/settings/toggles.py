@@ -34,6 +34,9 @@ DESCRIPTIONS = {
   'RecordFront': tr_noop("Upload data from the cabin camera and help improve the driver monitoring algorithm."),
   "IsMetric": tr_noop("Display speed in km/h instead of mph."),
   "RecordAudio": tr_noop("Record and store microphone audio while driving. The audio will be included in the dashcam video in comma connect."),
+  "AlwaysAllowUploads": tr_noop("Allow queued full logs and videos to upload over metered networks. Uses mobile data."),
+  "AutoUploadRlog": tr_noop("Automatically upload full raw logs (rlog) offroad over Wi-Fi."),
+  "AutoUploadCameras": tr_noop("Automatically upload road and wide camera footage offroad over Wi-Fi (driver camera excluded)."),
 }
 
 
@@ -101,6 +104,24 @@ class TogglesLayout(Widget):
         lambda: tr("Use Metric System"),
         DESCRIPTIONS["IsMetric"],
         "metric.png",
+        False,
+      ),
+      "AutoUploadRlog": (
+        lambda: tr("Auto Upload Raw Logs"),
+        DESCRIPTIONS["AutoUploadRlog"],
+        "wifi_uploading.png",
+        False,
+      ),
+      "AutoUploadCameras": (
+        lambda: tr("Auto Upload Road Cameras"),
+        DESCRIPTIONS["AutoUploadCameras"],
+        "road.png",
+        False,
+      ),
+      "AlwaysAllowUploads": (
+        lambda: tr("Always Allow Uploads"),
+        DESCRIPTIONS["AlwaysAllowUploads"],
+        "network.png",
         False,
       ),
     }
