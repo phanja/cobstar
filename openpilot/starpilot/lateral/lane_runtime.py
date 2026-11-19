@@ -25,7 +25,7 @@ def read_settings(params) -> LaneCenteringSettings:
     return value == b'1'
 
   try:
-    enabled = boolean('LaneCentering', b'0')
+    enabled = boolean('LaneCentering', b'1')
     pause = boolean('LaneCenteringPauseOnSignal', b'1')
     offset = float(raw('LaneCenterOffset', b'0.0'))
     authority = float(raw('LaneCenteringE2EAuthority', b'0.5'))
@@ -35,7 +35,7 @@ def read_settings(params) -> LaneCenteringSettings:
       strength = STRENGTH_BASELINE
     if not math.isfinite(strength) or not 0.5 <= strength <= STRENGTH_MAX:
       raise ValueError('Invalid lane strength')
-    if not math.isfinite(offset) or not -0.3 <= offset <= 0.3 or not math.isfinite(authority) or not 0 <= authority <= 1:
+    if not math.isfinite(offset) or not -1.2 <= offset <= 1.2 or not math.isfinite(authority) or not 0 <= authority <= 1:
       raise ValueError('Invalid lane tuning')
     return LaneCenteringSettings(enabled, offset, authority, pause, strength)
   except (OSError, ValueError):
