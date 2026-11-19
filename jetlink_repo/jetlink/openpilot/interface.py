@@ -63,6 +63,8 @@ class Keys:
   select: str | None = None
   # API 3's kept pointers, unread since the model index: until the next minor release
   pointers: str | None = None
+  # BOOL: big model paused by user (openpilot toggles via double cancel press)
+  paused: str | None = None
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,9 @@ class ModelSide(WorkerSide, Protocol):
     """Is openpilot or MADS in control? The joining model asks on modeld's
     frame thread before every frame and swaps the large model in only while
     not. True when it cannot tell; never raises."""
+
+  def is_paused(self) -> bool:
+    """Is the big model paused by user request? Never raises."""
 
   def event(self, name: str, **fields: Any) -> None:
     """A structured log line (cloudlog.event)."""
